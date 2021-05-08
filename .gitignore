@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Fast-mbox specific
+.chunks
+attachments/
+*.mbox
+*.db
+jsons/
