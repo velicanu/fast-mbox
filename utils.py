@@ -100,7 +100,7 @@ class Message:
         if (
             part["Content-Type"]
             and "text" in part["Content-Type"]
-            and type(part.get_payload()) == str
+            and isinstance(part.get_payload(), str)
         ):
             body = part.get_payload()
             self.body.append(body)
