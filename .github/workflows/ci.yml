@@ -1,0 +1,27 @@
+name: Lint
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: install requirements
+        run: |
+          for requirement in requirements/requirements*.txt ; do uv pip install -r $requirement; done
+
+      - name: lint and test
+        run: |
+          echo Checking formatting...
+          ruff format --check .
+          echo Checking linting...
+          ruff check  .
+          if [ -d "tests" ]; then echo Running tests... ; pytest; fi

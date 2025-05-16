@@ -1,10 +1,9 @@
 import json
 import multiprocessing as mp
 import os
-import sqlite3
 import subprocess
 
-import click
+import typer
 
 from utils import Mbox, Sqliter, get_logger
 
@@ -42,7 +41,6 @@ def process_chunk(filename):
         sql.insert(table="messages", insert_batch=insert_batch)
 
     json_file.close()
-    con.close()
 
 
 def split_mbox(mbox_file):
@@ -65,9 +63,7 @@ def split_mbox(mbox_file):
         )
 
 
-@click.command()
-@click.argument("mbox_file")
-def read(mbox_file):
+def main(mbox_file: str):
     """
     asdf
     """
@@ -97,4 +93,4 @@ def read(mbox_file):
 
 
 if __name__ == "__main__":
-    read()
+    typer.run(main)
