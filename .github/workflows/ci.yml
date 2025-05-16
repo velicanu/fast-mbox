@@ -16,10 +16,12 @@ jobs:
 
       - name: install requirements
         run: |
-          for requirement in requirements/requirements*.txt ; do uv pip install -r $requirement --system; done
+          uv venv && source .venv/bin/activate
+          for requirement in requirements/requirements*.txt ; do uv pip install -r $requirement; done
 
       - name: lint and test
         run: |
+          source .venv/bin/activate
           echo Checking formatting...
           ruff format --check .
           echo Checking linting...
