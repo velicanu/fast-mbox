@@ -16,7 +16,7 @@ jobs:
 
       - name: install requirements
         run: |
-          for requirement in requirements/requirements*.txt ; do uv pip install -r $requirement; done
+          for requirement in requirements/requirements*.txt ; do uv pip install -r $requirement --system; done
 
       - name: lint and test
         run: |
