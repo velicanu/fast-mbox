@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import sqlite3
 from binascii import Error as BinasciiError
 
 import dateutil.parser
@@ -81,8 +80,20 @@ class Message:
         try:
             self.date = dateutil.parser.parse(self.message["date"])
         except dateutil.parser._parser.ParserError:
+            fixed_string = self.message["date"]
+
+            # add -offset to dates that don't have it
+            pattern = r"(.*\d{1,2}:\d{2}:\d{2})\s+(\d{4})$"
+            if re.match(pattern, self.message["date"]):
+                fixed_string = re.sub(pattern, r"\1 -\2", self.message["date"])
+
+            # remove space before offset
+            pattern = r"(.*\d{1,2}:\d{2}:\d{2})\s+([+-])\s+(\d{4})$"
+            if re.match(pattern, self.message["date"]):
+                fixed_string = re.sub(pattern, r"\1 \2\3", self.message["date"])
+
             self.date = self.message["_date_obj"] = dateutil.parser.parse(
-                self.message["date"].split("(")[0]
+                fixed_string.split("(")[0]
             )
 
     def _add_base_json(self):
@@ -164,209 +175,3 @@ class Attachment:
             new_filename = f"{date_}-{suffix}-{output_root}"
             suffix += 1
         return os.path.join(folder, new_filename)
-
-
-FORBIDDEN_NAMES = {
-    "ABORT",
-    "ACTION",
-    "ADD",
-    "AFTER",
-    "ALL",
-    "ALTER",
-    "ALWAYS",
-    "ANALYZE",
-    "AND",
-    "AS",
-    "ASC",
-    "ATTACH",
-    "AUTOINCREMENT",
-    "BEFORE",
-    "BEGIN",
-    "BETWEEN",
-    "BY",
-    "CASCADE",
-    "CASE",
-    "CAST",
-    "CHECK",
-    "COLLATE",
-    "COLUMN",
-    "COMMIT",
-    "CONFLICT",
-    "CONSTRAINT",
-    "CREATE",
-    "CROSS",
-    "CURRENT",
-    "CURRENT_DATE",
-    "CURRENT_TIME",
-    "CURRENT_TIMESTAMP",
-    "DATABASE",
-    "DEFAULT",
-    "DEFERRABLE",
-    "DEFERRED",
-    "DELETE",
-    "DESC",
-    "DETACH",
-    "DISTINCT",
-    "DO",
-    "DROP",
-    "EACH",
-    "ELSE",
-    "END",
-    "ESCAPE",
-    "EXCEPT",
-    "EXCLUDE",
-    "EXCLUSIVE",
-    "EXISTS",
-    "EXPLAIN",
-    "FAIL",
-    "FILTER",
-    "FIRST",
-    "FOLLOWING",
-    "FOR",
-    "FOREIGN",
-    "FROM",
-    "FULL",
-    "GENERATED",
-    "GLOB",
-    "GROUP",
-    "GROUPS",
-    "HAVING",
-    "IF",
-    "IGNORE",
-    "IMMEDIATE",
-    "IN",
-    "INDEX",
-    "INDEXED",
-    "INITIALLY",
-    "INNER",
-    "INSERT",
-    "INSTEAD",
-    "INTERSECT",
-    "INTO",
-    "IS",
-    "ISNULL",
-    "JOIN",
-    "KEY",
-    "LAST",
-    "LEFT",
-    "LIKE",
-    "LIMIT",
-    "MATCH",
-    "MATERIALIZED",
-    "NATURAL",
-    "NO",
-    "NOT",
-    "NOTHING",
-    "NOTNULL",
-    "NULL",
-    "NULLS",
-    "OF",
-    "OFFSET",
-    "ON",
-    "OR",
-    "ORDER",
-    "OTHERS",
-    "OUTER",
-    "OVER",
-    "PARTITION",
-    "PLAN",
-    "PRAGMA",
-    "PRECEDING",
-    "PRIMARY",
-    "QUERY",
-    "RAISE",
-    "RANGE",
-    "RECURSIVE",
-    "REFERENCES",
-    "REGEXP",
-    "REINDEX",
-    "RELEASE",
-    "RENAME",
-    "REPLACE",
-    "RESTRICT",
-    "RETURNING",
-    "RIGHT",
-    "ROLLBACK",
-    "ROW",
-    "ROWS",
-    "SAVEPOINT",
-    "SELECT",
-    "SET",
-    "TABLE",
-    "TEMP",
-    "TEMPORARY",
-    "THEN",
-    "TIES",
-    "TO",
-    "TRANSACTION",
-    "TRIGGER",
-    "UNBOUNDED",
-    "UNION",
-    "UNIQUE",
-    "UPDATE",
-    "USING",
-    "VACUUM",
-    "VALUES",
-    "VIEW",
-    "VIRTUAL",
-    "WHEN",
-    "WHERE",
-    "WINDOW",
-    "WITH",
-    "WITHOUT",
-}
-
-
-class Sqliter:
-    """This class sqlities so you don't have to"""
-
-    def __init__(self, output_db):
-        self.db = output_db
-
-    def insert(self, table, batch):
-        """
-        Inserts a batch of records into a table, creating it if it doesn't exist
-        """
-        first = batch[0]
-        self._create_table_if_not_exists(table, first)
-        with sqlite3.connect(self.db) as con:
-            cols = [
-                self._col(k) for k, v in first.items() if type(v) not in {list, dict}
-            ]
-            qs = ["?" for k in cols]
-            con.executemany(
-                f"""
-                INSERT INTO {table} ({",".join(cols)})
-                VALUES ({",".join(qs)})
-                """,
-                [
-                    tuple(v for k, v in record if type(v) not in {list, dict})
-                    for record in batch
-                ],
-            )
-            log.info(f"Inserted {len(batch)} records into {self.db}:{table}")
-
-    def _col(self, column_name):
-        """
-        Returns a clean column name, adding underscores if necessary
-        """
-        clean_col_name = re.sub(r"[^a-zA-Z0-9\_]", "", column_name)
-        if clean_col_name[0].isdigit():
-            clean_col_name = f"_{clean_col_name}"
-        if clean_col_name.upper() in FORBIDDEN_NAMES:
-            clean_col_name = f"{clean_col_name}_"
-        return clean_col_name.lower()
-
-    def _create_table_if_not_exists(self, table, record):
-        with sqlite3.connect(self.db) as con:
-            con.execute(
-                f"CREATE TABLE IF NOT EXISTS {table} ("
-                + ",".join(
-                    [
-                        "{self._col(k)}"
-                        for k, v in record.items()
-                        if type(v) not in {list, dict}
-                    ]
-                )
-                + ")"
-            )

@@ -3,9 +3,10 @@ import multiprocessing as mp
 import os
 import subprocess
 
+import polars as pl
 import typer
 
-from utils import Mbox, Sqliter, get_logger
+from utils import Mbox, get_logger
 
 log = get_logger(__file__)
 
@@ -16,7 +17,7 @@ def process_chunk(filename):
     json_file = open(json_filename, "w")
     insert_batch = []
 
-    sql = Sqliter("example.db")
+    # sql = Sqliter("example.db")
     mbox = Mbox(filename)
     for message in mbox:
         message.json["attachments"] = []
@@ -37,8 +38,9 @@ def process_chunk(filename):
             }
         )
 
-    if insert_batch:
-        sql.insert(table="messages", insert_batch=insert_batch)
+    parquet_filename = f"parquets/mail_{chunk_number}.parquet"
+    df = pl.DataFrame(insert_batch)
+    df.write_parquet(parquet_filename)
 
     json_file.close()
 
@@ -55,7 +57,7 @@ def split_mbox(mbox_file):
     if abs(mbox_size - chunk_size) / mbox_size > 0.0001:
         subprocess.run(
             [
-                "awk",
+                "gawk",
                 """BEGIN{chunk=0} /^From /{msgs++;if(msgs==5000){msgs=0;chunk++}}{print > ".chunks/chunk_" chunk ".txt"}""",
                 mbox_file,
             ],
@@ -69,12 +71,12 @@ def main(mbox_file: str):
     """
 
     os.makedirs("jsons", exist_ok=True)
+    os.makedirs("parquets", exist_ok=True)
     os.makedirs("attachments", exist_ok=True)
     os.makedirs(".chunks", exist_ok=True)
 
-    split_mbox(mbox_file)
-    if os.path.exists("example.db"):
-        os.remove("example.db")
+    log.info("splitting mbox file")
+    # split_mbox(mbox_file)
 
     chunks = [
         os.path.join(".chunks", c)
@@ -85,11 +87,33 @@ def main(mbox_file: str):
     n_workers = mp.cpu_count()
     pool = mp.Pool(n_workers)
 
+    log.info("processing chunks")
     for chunk in chunks:
-        results = pool.apply_async(process_chunk, args=(chunk,))
+        pass
+        # pool.apply_async(process_chunk, args=(chunk,))
     pool.close()
     pool.join()
-    results.get()
+
+    first = True
+    for pfile in os.listdir("parquets"):
+        pfilename = os.path.join("parquets", pfile)
+        log.info(f"writing {pfilename} to mail.db")
+        df = pl.read_parquet(pfilename)
+        if first:
+            df.write_database(
+                "messages",
+                "sqlite:///./mail.db",
+                if_table_exists="replace",
+                engine="adbc",
+            )
+            first = False
+        else:
+            df.write_database(
+                "messages",
+                "sqlite:///./mail.db",
+                if_table_exists="append",
+                engine="adbc",
+            )
 
 
 if __name__ == "__main__":
