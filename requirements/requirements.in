@@ -1,0 +1,5 @@
+typer
+python-dateutil
+polars
+adbc-driver-sqlite
+pyarrow
