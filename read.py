@@ -76,7 +76,7 @@ def main(mbox_file: str):
     os.makedirs(".chunks", exist_ok=True)
 
     log.info("splitting mbox file")
-    # split_mbox(mbox_file)
+    split_mbox(mbox_file)
 
     chunks = [
         os.path.join(".chunks", c)
@@ -89,8 +89,7 @@ def main(mbox_file: str):
 
     log.info("processing chunks")
     for chunk in chunks:
-        pass
-        # pool.apply_async(process_chunk, args=(chunk,))
+        pool.apply_async(process_chunk, args=(chunk,))
     pool.close()
     pool.join()
 
